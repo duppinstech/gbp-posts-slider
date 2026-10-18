@@ -1,0 +1,5 @@
+# Local Claude notes
+
+Copy this file to `CLAUDE.local.md`. That copy is gitignored.
+
+Put machine-specific notes here, such as the local WordPress URL. Do not put secrets in either file.

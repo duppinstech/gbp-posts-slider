@@ -1,1 +1,12 @@
 *.zip
+.env*
+vendor/
+node_modules/
+dist/
+build/
+*.log
+__pycache__/
+.venv/
+CLAUDE.local.md
+.claude/settings.local.json
+.claude/worktrees/
