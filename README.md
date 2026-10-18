@@ -120,3 +120,33 @@ More filters will be added in future releases.
 ## License
 
 [GPL-2.0-or-later](LICENSE)
+
+---
+
+## Local development
+
+1. Run WordPress 6.0+ on PHP 7.4+.
+2. Copy this directory to `wp-content/plugins/gbp-posts-slider`. The folder name has to stay `gbp-posts-slider`.
+3. Activate **GBP Posts Slider**.
+4. Define `GBP_CLIENT_ID` and `GBP_CLIENT_SECRET` in `wp-config.php`, as in Installation, or enter them under **Settings → GBP Posts Slider**.
+5. Connect the Google account and select the business on that settings screen, then use **Sync Now**.
+6. Put `[gbp_posts_slider]` on a page.
+
+There is no Composer or npm install. The slider ships its own front-end assets.
+
+## Tests
+
+There is no test suite and no test command. Before opening a pull request, run:
+
+```
+php -l gbp-posts-slider.php
+```
+
+When a change touches OAuth, sync, or the slider, also check the settings screen and the shortcode on a local site.
+
+## Release and deploy
+
+1. Update `CHANGELOG.md` and the `Stable tag` in `readme.txt`.
+2. Merge to `main` and publish a GitHub release.
+3. The release workflow builds `gbp-posts-slider.zip` and attaches it to that release. Do not commit the zip.
+4. Deploy by uploading the zip under **Plugins → Add New → Upload Plugin**, or by copying the plugin directory to `wp-content/plugins/` on the server.
