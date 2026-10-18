@@ -45,8 +45,12 @@ class GBP_Posts_Slider {
         add_action( 'admin_menu',         [ $this, 'admin_menu' ] );
         add_action( 'admin_init',         [ $this, 'handle_oauth_callback' ] );
         add_action( 'admin_notices',      [ $this, 'admin_notices' ] );
+        add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_admin_assets' ] );
         add_action( self::CRON_HOOK,      [ $this, 'sync_posts' ] );
-        add_action( 'wp_ajax_gbp_disconnect', [ $this, 'ajax_disconnect' ] );
+
+        add_action( 'wp_ajax_gbp_disconnect',      [ $this, 'ajax_disconnect' ] );
+        add_action( 'wp_ajax_gbp_fetch_accounts',  [ $this, 'ajax_fetch_accounts' ] );
+        add_action( 'wp_ajax_gbp_fetch_locations', [ $this, 'ajax_fetch_locations' ] );
 
         add_shortcode( 'gbp_posts_slider', [ $this, 'shortcode' ] );
         add_action( 'wp_enqueue_scripts', [ $this, 'enqueue_assets' ] );
@@ -135,6 +139,144 @@ class GBP_Posts_Slider {
         );
     }
 
+    public function enqueue_admin_assets( $hook ) {
+        if ( 'settings_page_gbp-posts-slider' !== $hook ) return;
+
+        wp_enqueue_style(
+            'gbp-admin',
+            GBP_SLIDER_URL . 'assets/gbp-admin.css',
+            [],
+            GBP_SLIDER_VERSION
+        );
+
+        wp_enqueue_script(
+            'gbp-admin',
+            GBP_SLIDER_URL . 'assets/gbp-admin.js',
+            [ 'jquery' ],
+            GBP_SLIDER_VERSION,
+            true
+        );
+
+        wp_localize_script( 'gbp-admin', 'gbpAdmin', [
+            'ajaxUrl'   => admin_url( 'admin-ajax.php' ),
+            'nonce'     => wp_create_nonce( 'gbp_admin' ),
+            'i18n'      => [
+                'loadingAccounts'  => __( 'Loading accounts…', 'gbp-posts-slider' ),
+                'loadingLocations' => __( 'Loading locations…', 'gbp-posts-slider' ),
+                'selectAccount'    => __( '— Select an account —', 'gbp-posts-slider' ),
+                'selectLocation'   => __( '— Select your business —', 'gbp-posts-slider' ),
+                'noAccounts'       => __( 'No accounts found. Make sure your Google account has access to a Business Profile.', 'gbp-posts-slider' ),
+                'noLocations'      => __( 'No locations found for this account.', 'gbp-posts-slider' ),
+                'error'            => __( 'Error fetching data. Please try again.', 'gbp-posts-slider' ),
+                'searchPlaceholder'=> __( 'Search by business name…', 'gbp-posts-slider' ),
+                'selected'         => __( 'Selected', 'gbp-posts-slider' ),
+            ],
+        ] );
+    }
+
+    /* ------------------------------------------------------------------
+     *  AJAX — fetch Google accounts and locations
+     * ------------------------------------------------------------------ */
+
+    public function ajax_fetch_accounts() {
+        check_ajax_referer( 'gbp_admin', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) wp_send_json_error( 'Unauthorized', 403 );
+
+        $access_token = $this->get_access_token();
+        if ( ! $access_token ) {
+            wp_send_json_error( __( 'Not connected to Google. Please connect first.', 'gbp-posts-slider' ) );
+        }
+
+        $response = wp_remote_get( 'https://mybusinessaccountmanagement.googleapis.com/v1/accounts', [
+            'headers' => [
+                'Authorization' => 'Bearer ' . $access_token,
+                'Accept'        => 'application/json',
+            ],
+            'timeout' => 20,
+        ] );
+
+        if ( is_wp_error( $response ) ) {
+            wp_send_json_error( $response->get_error_message() );
+        }
+
+        $body = json_decode( wp_remote_retrieve_body( $response ), true );
+
+        if ( empty( $body['accounts'] ) ) {
+            wp_send_json_error( __( 'No accounts found. Make sure your Google account has access to a Business Profile.', 'gbp-posts-slider' ) );
+        }
+
+        $accounts = array_map( function( $acct ) {
+            // Resource name is "accounts/123456789" — extract just the numeric ID.
+            $id = preg_replace( '#^accounts/#', '', $acct['name'] ?? '' );
+            return [
+                'id'   => $id,
+                'name' => $acct['accountName'] ?? $acct['name'] ?? $id,
+                'type' => $acct['type'] ?? '',
+            ];
+        }, $body['accounts'] );
+
+        wp_send_json_success( $accounts );
+    }
+
+    public function ajax_fetch_locations() {
+        check_ajax_referer( 'gbp_admin', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) wp_send_json_error( 'Unauthorized', 403 );
+
+        $account_id = sanitize_text_field( $_POST['account_id'] ?? '' );
+        if ( empty( $account_id ) ) {
+            wp_send_json_error( __( 'Account ID is required.', 'gbp-posts-slider' ) );
+        }
+
+        $access_token = $this->get_access_token();
+        if ( ! $access_token ) {
+            wp_send_json_error( __( 'Not connected to Google. Please connect first.', 'gbp-posts-slider' ) );
+        }
+
+        $url = add_query_arg(
+            [ 'readMask' => 'name,title,storefrontAddress,websiteUri,phoneNumbers' ],
+            sprintf(
+                'https://mybusinessbusinessinformation.googleapis.com/v1/accounts/%s/locations',
+                rawurlencode( $account_id )
+            )
+        );
+
+        $response = wp_remote_get( $url, [
+            'headers' => [
+                'Authorization' => 'Bearer ' . $access_token,
+                'Accept'        => 'application/json',
+            ],
+            'timeout' => 20,
+        ] );
+
+        if ( is_wp_error( $response ) ) {
+            wp_send_json_error( $response->get_error_message() );
+        }
+
+        $body = json_decode( wp_remote_retrieve_body( $response ), true );
+
+        if ( empty( $body['locations'] ) ) {
+            wp_send_json_error( __( 'No locations found for this account.', 'gbp-posts-slider' ) );
+        }
+
+        $locations = array_map( function( $loc ) {
+            // Resource name is "locations/987654321" — extract just the numeric ID.
+            $id      = preg_replace( '#^locations/#', '', $loc['name'] ?? '' );
+            $address = $loc['storefrontAddress'] ?? [];
+            $city    = $address['locality'] ?? '';
+            $state   = $address['administrativeArea'] ?? '';
+            $subtitle = trim( implode( ', ', array_filter( [ $city, $state ] ) ) );
+
+            return [
+                'id'       => $id,
+                'name'     => $loc['title'] ?? $id,
+                'subtitle' => $subtitle,
+                'website'  => $loc['websiteUri'] ?? '',
+            ];
+        }, $body['locations'] );
+
+        wp_send_json_success( $locations );
+    }
+
     public function admin_notices() {
         if ( ! is_admin() || ! current_user_can( 'manage_options' ) ) return;
 
@@ -180,6 +322,11 @@ class GBP_Posts_Slider {
             }
             $settings['account_id']  = sanitize_text_field( $_POST['account_id'] ?? '' );
             $settings['location_id'] = sanitize_text_field( $_POST['location_id'] ?? '' );
+
+            // Preserve human-readable location name sent by the JS picker.
+            if ( ! empty( $_POST['location_name'] ) ) {
+                update_option( 'gbp_slider_location_name', sanitize_text_field( $_POST['location_name'] ), false );
+            }
 
             $this->save_settings( $settings );
             wp_safe_redirect( admin_url( 'options-general.php?page=gbp-posts-slider&saved=1' ) );
@@ -300,37 +447,89 @@ class GBP_Posts_Slider {
                 <!-- ── Business Location Card ── -->
                 <div class="gbps-card gbps-card--full">
                     <h2><?php esc_html_e( 'Business Location', 'gbp-posts-slider' ); ?></h2>
-                    <p class="description">
-                        <?php esc_html_e( 'Enter the numeric IDs from your Google Business Profile — not prefixed with "accounts/" or "locations/".', 'gbp-posts-slider' ); ?>
-                    </p>
 
-                    <form method="post" action="">
-                        <?php wp_nonce_field( 'gbp_save_settings' ); ?>
-                        <?php if ( $this->credentials_are_built_in() ) : ?>
-                            <!-- Credentials handled via wp-config.php constants -->
-                        <?php else : ?>
-                            <input type="hidden" name="client_id"     value="<?php echo esc_attr( $settings['client_id'] ); ?>">
-                            <input type="hidden" name="client_secret" value="<?php echo esc_attr( $settings['client_secret'] ); ?>">
+                    <?php if ( $is_connected ) : ?>
+
+                        <?php
+                        $has_location = ! empty( $settings['account_id'] ) && ! empty( $settings['location_id'] );
+                        $saved_name   = get_option( 'gbp_slider_location_name', '' );
+                        ?>
+
+                        <?php if ( $has_location && $saved_name ) : ?>
+                        <!-- Currently saved location -->
+                        <div class="gbps-location-saved" id="gbps-location-saved">
+                            <div class="gbps-location-pill">
+                                <span class="dashicons dashicons-location"></span>
+                                <div>
+                                    <strong><?php echo esc_html( $saved_name ); ?></strong>
+                                    <span class="gbps-location-ids">
+                                        Account: <?php echo esc_html( $settings['account_id'] ); ?> &nbsp;·&nbsp;
+                                        Location: <?php echo esc_html( $settings['location_id'] ); ?>
+                                    </span>
+                                </div>
+                            </div>
+                            <button type="button" class="button button-small" id="gbps-change-location">
+                                <?php esc_html_e( 'Change Business', 'gbp-posts-slider' ); ?>
+                            </button>
+                        </div>
                         <?php endif; ?>
 
-                        <table class="form-table" role="presentation">
-                            <tr>
-                                <th scope="row"><?php esc_html_e( 'Account ID', 'gbp-posts-slider' ); ?></th>
-                                <td>
-                                    <input type="text" name="account_id" class="regular-text" value="<?php echo esc_attr( $settings['account_id'] ); ?>">
-                                    <p class="description"><?php esc_html_e( 'Example: 123456789', 'gbp-posts-slider' ); ?></p>
-                                </td>
-                            </tr>
-                            <tr>
-                                <th scope="row"><?php esc_html_e( 'Location ID', 'gbp-posts-slider' ); ?></th>
-                                <td>
-                                    <input type="text" name="location_id" class="regular-text" value="<?php echo esc_attr( $settings['location_id'] ); ?>">
-                                    <p class="description"><?php esc_html_e( 'Example: 987654321', 'gbp-posts-slider' ); ?></p>
-                                </td>
-                            </tr>
-                        </table>
-                        <p><button class="button button-primary" name="gbp_save_settings" value="1"><?php esc_html_e( 'Save Settings', 'gbp-posts-slider' ); ?></button></p>
-                    </form>
+                        <!-- Picker (shown immediately when no location saved, or on "Change") -->
+                        <div id="gbps-location-picker" <?php echo ( $has_location && $saved_name ) ? 'style="display:none"' : ''; ?>>
+
+                            <p class="description" style="margin-bottom:16px;">
+                                <?php esc_html_e( 'Select the Google account that manages your Business Profile, then pick your location.', 'gbp-posts-slider' ); ?>
+                            </p>
+
+                            <!-- Step 1: Account -->
+                            <div class="gbps-picker-step">
+                                <label class="gbps-picker-label">
+                                    <span class="gbps-step-badge">1</span>
+                                    <?php esc_html_e( 'Google Account', 'gbp-posts-slider' ); ?>
+                                </label>
+                                <select id="gbps-account-select" class="gbps-select">
+                                    <option value=""><?php esc_html_e( 'Loading…', 'gbp-posts-slider' ); ?></option>
+                                </select>
+                                <p id="gbps-account-error" class="gbps-picker-error" style="display:none;"></p>
+                            </div>
+
+                            <!-- Step 2: Location search + list -->
+                            <div class="gbps-picker-step" id="gbps-location-step" style="display:none;">
+                                <label class="gbps-picker-label">
+                                    <span class="gbps-step-badge">2</span>
+                                    <?php esc_html_e( 'Business Location', 'gbp-posts-slider' ); ?>
+                                </label>
+                                <input type="text" id="gbps-location-search"
+                                       class="regular-text gbps-search-input"
+                                       placeholder="<?php esc_attr_e( 'Search by name or city…', 'gbp-posts-slider' ); ?>">
+                                <div id="gbps-location-list" class="gbps-location-list"></div>
+                                <p id="gbps-location-error" class="gbps-picker-error" style="display:none;"></p>
+                            </div>
+
+                        </div><!-- #gbps-location-picker -->
+
+                        <!-- Hidden form that submits the chosen IDs -->
+                        <form method="post" action="" id="gbps-location-form" style="margin-top:16px;">
+                            <?php wp_nonce_field( 'gbp_save_settings' ); ?>
+                            <?php if ( ! $this->credentials_are_built_in() ) : ?>
+                                <input type="hidden" name="client_id"     value="<?php echo esc_attr( $settings['client_id'] ); ?>">
+                                <input type="hidden" name="client_secret" value="<?php echo esc_attr( $settings['client_secret'] ); ?>">
+                            <?php endif; ?>
+                            <input type="hidden" name="account_id"   id="gbps-account-id-input"   value="<?php echo esc_attr( $settings['account_id'] ); ?>">
+                            <input type="hidden" name="location_id"  id="gbps-location-id-input"  value="<?php echo esc_attr( $settings['location_id'] ); ?>">
+                            <input type="hidden" name="location_name" id="gbps-location-name-input" value="<?php echo esc_attr( $saved_name ); ?>">
+
+                            <div id="gbps-save-row" style="<?php echo $has_location ? '' : 'display:none'; ?>">
+                                <div class="gbps-selected-preview" id="gbps-selected-preview" style="display:none;"></div>
+                                <button class="button button-primary" name="gbp_save_settings" value="1" id="gbps-save-location-btn">
+                                    <?php esc_html_e( 'Save Location', 'gbp-posts-slider' ); ?>
+                                </button>
+                            </div>
+                        </form>
+
+                    <?php else : ?>
+                        <p class="description"><?php esc_html_e( 'Connect to Google Business Profile above to search and select your business location.', 'gbp-posts-slider' ); ?></p>
+                    <?php endif; ?>
                 </div>
 
                 <!-- ── Sync Card (only when connected) ── -->
@@ -503,8 +702,11 @@ class GBP_Posts_Slider {
 
         $settings                  = $this->settings();
         $settings['refresh_token'] = '';
+        $settings['account_id']    = '';
+        $settings['location_id']   = '';
         $this->save_settings( $settings );
         delete_transient( 'gbp_access_token_cache' );
+        delete_option( 'gbp_slider_location_name' );
 
         wp_safe_redirect( admin_url( 'options-general.php?page=gbp-posts-slider&disconnected=1' ) );
         exit;
