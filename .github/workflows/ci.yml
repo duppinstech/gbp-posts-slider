@@ -1,0 +1,20 @@
+name: CI
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: PHP syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "7.4"
+          coverage: none
+      - name: Lint plugin PHP
+        run: php -l gbp-posts-slider.php

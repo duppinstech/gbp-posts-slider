@@ -1,0 +1,25 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    name: Package plugin zip
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build zip
+        run: |
+          mkdir -p dist/gbp-posts-slider
+          cp gbp-posts-slider.php readme.txt LICENSE README.md dist/gbp-posts-slider/
+          cp -r assets dist/gbp-posts-slider/
+          (cd dist && zip -r gbp-posts-slider.zip gbp-posts-slider)
+      - name: Attach zip to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" dist/gbp-posts-slider.zip --clobber
