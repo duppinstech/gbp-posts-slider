@@ -33,6 +33,16 @@ GBP_Posts_Slider_GitHub_Updater::boot(
     )
 );
 
+require_once GBP_SLIDER_DIR . 'includes/class-gbp-posts-slider-plugin-info.php';
+GBP_Posts_Slider_Plugin_Info::boot(
+    array(
+        'file'         => __FILE__,
+        'settings_url' => 'gbp-posts-slider',
+        'help_url'     => '',
+        'support_url'  => 'mailto:support@duppinstech.com',
+    )
+);
+
 // ---------------------------------------------------------------------------
 // Developer convenience: define these in wp-config.php to hide credential
 // fields from the admin UI entirely (end-users just click "Connect").
