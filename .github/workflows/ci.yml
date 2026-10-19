@@ -17,4 +17,11 @@ jobs:
           php-version: "7.4"
           coverage: none
       - name: Lint plugin PHP
-        run: php -l gbp-posts-slider.php
+        run: |
+          set -euo pipefail
+          find . -name '*.php' -not -path './build/*' -print0 | xargs -0 -n1 php -l
+      - name: Release notes for the current version
+        run: |
+          set -euo pipefail
+          version=$(sed -n 's/^ \* Version:[[:space:]]*//p' gbp-posts-slider.php | tr -d '\r')
+          bash bin/release-notes.sh "$version" gbp-posts-slider.php "$RUNNER_TEMP/release-notes.md"
