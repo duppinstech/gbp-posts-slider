@@ -22,4 +22,6 @@ paths:
 
 ## Hooks we expose
 - New hooks are prefixed `gbp_`, documented with a docblock, and listed here. Renaming or removing a public hook is a breaking change; deprecate first.
-<!-- GENERATE: every apply_filters / do_action the plugin fires, one line each with what it's for. "None yet" if there are none. -->
+- `gbp_posts_slider_github_updater_config` — filters the GitHub updater configuration before it is stored.
+- `gbp_posts_slider_github_release_http_args` — filters the `wp_remote_get()` args for the GitHub latest-release request.
+- The plugin does not call `do_action`.
