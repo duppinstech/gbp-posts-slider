@@ -147,6 +147,6 @@ When a change touches OAuth, sync, or the slider, also check the settings screen
 ## Release and deploy
 
 1. Update `CHANGELOG.md` and the `Stable tag` in `readme.txt`.
-2. Merge to `main` and publish a GitHub release.
-3. The release workflow builds `gbp-posts-slider.zip` and attaches it to that release. Do not commit the zip.
+2. Merge to `main` and push a `v*` tag that matches the plugin header `Version`, `GBP_SLIDER_VERSION`, and the `Stable tag`.
+3. The release workflow checks that tag, builds `gbp-posts-slider.zip`, and publishes the GitHub release with that zip. Do not commit the zip.
 4. Deploy by uploading the zip under **Plugins → Add New → Upload Plugin**, or by copying the plugin directory to `wp-content/plugins/` on the server.

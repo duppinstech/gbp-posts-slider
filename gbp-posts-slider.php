@@ -6,6 +6,7 @@
  * Version:           1.0.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
+ * Update URI:        https://github.com/duppinstech/gbp-posts-slider
  * Author:            Duppins Technology
  * Author URI:        https://duppinstech.com
  * License:           GPL-2.0-or-later
@@ -20,6 +21,17 @@ define( 'GBP_SLIDER_VERSION', '1.0.0' );
 define( 'GBP_SLIDER_FILE',    __FILE__ );
 define( 'GBP_SLIDER_DIR',     plugin_dir_path( __FILE__ ) );
 define( 'GBP_SLIDER_URL',     plugin_dir_url( __FILE__ ) );
+
+require_once GBP_SLIDER_DIR . 'includes/class-gbp-posts-slider-github-updater.php';
+GBP_Posts_Slider_GitHub_Updater::boot(
+    array(
+        'file'    => __FILE__,
+        'version' => GBP_SLIDER_VERSION,
+        'owner'   => 'duppinstech',
+        'repo'    => 'gbp-posts-slider',
+        'prefix'  => 'gbp_posts_slider',
+    )
+);
 
 // ---------------------------------------------------------------------------
 // Developer convenience: define these in wp-config.php to hide credential

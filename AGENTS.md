@@ -10,6 +10,9 @@ Lint:
 
 ```
 php -l gbp-posts-slider.php
+php -l uninstall.php
+php -l includes/class-gbp-posts-slider-github-updater.php
+php -l includes/class-gbp-posts-slider-plugin-info.php
 ```
 
 Test: no test command. Do not add a test runner as a drive-by change.
@@ -17,13 +20,10 @@ Test: no test command. Do not add a test runner as a drive-by change.
 Build, from the repository root in bash (this is what the release workflow runs):
 
 ```
-mkdir -p dist/gbp-posts-slider
-cp gbp-posts-slider.php readme.txt LICENSE README.md dist/gbp-posts-slider/
-cp -r assets dist/gbp-posts-slider/
-(cd dist && zip -r gbp-posts-slider.zip gbp-posts-slider)
+bash bin/build-zip.sh
 ```
 
-Do not commit the zip. `dist/` is gitignored.
+The zip is `gbp-posts-slider.zip` at the repository root, built from tracked files. It leaves out `.github/`, `.claude/`, `tests/`, `bin/`, and the agent docs. Do not commit the zip. `build/` and `*.zip` are gitignored.
 
 ## Conventions
 
